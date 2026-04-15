@@ -205,3 +205,27 @@ export const decryptFile = async (
         encryptedContent
     );
 };
+
+export const encryptFileKeyForSharing = async (
+    fileKeyBase64: string,
+    ownerPrivateKey: CryptoKey,
+    recipientPublicKeySpki: string
+): Promise<string> => {
+    const decryptedFileKey = await decryptFileKey(fileKeyBase64, ownerPrivateKey);
+    
+    const recipientPublicKey = await crypto.subtle.importKey(
+        "spki",
+        base64ToArrayBuffer(recipientPublicKeySpki),
+        { name: "RSA-OAEP", hash: "SHA-256" },
+        false,
+        ["encrypt"]
+    );
+    
+    const encryptedForRecipient = await crypto.subtle.encrypt(
+        { name: "RSA-OAEP" },
+        recipientPublicKey,
+        decryptedFileKey
+    );
+    
+    return arrayBufferToBase64(encryptedForRecipient);
+};
