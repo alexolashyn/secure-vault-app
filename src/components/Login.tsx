@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authApi } from '../api/auth';
 import { useAuth } from "../hooks/useAuth";
-import {connectMetaMask} from "../utils/metamask.ts";
+import MetaMaskModal from './MetaMaskModal';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -32,16 +32,9 @@ const Login = () => {
         }
     };
 
-    const handleMetamaskConnect = async () => {
-        try {
-            const isConnected = await connectMetaMask();
-            if (isConnected) {
-                navigate('/dashboard');
-            }
-        } catch (error) {
-            console.error(error);
-        }
-    }
+    const handleMetamaskSuccess = () => {
+        navigate('/dashboard');
+    };
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4 text-white font-sans">
@@ -87,26 +80,15 @@ const Login = () => {
                 </p>
             </div>
 
-            {/* MetaMask Modal */}
-            {showMetaMaskModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-800 border border-emerald-500 p-8 rounded-2xl max-w-sm w-full text-center shadow-2xl">
-                        <div className="mb-4 flex justify-center">
-                            <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center">
-                                <span className="text-4xl">🔑</span>
-                            </div>
-                        </div>
-                        <h3 className="text-2xl font-bold mb-2 text-white">Верифікація Web3</h3>
-                        <p className="text-gray-400 mb-6">Вхід успішний. Підключіть MetaMask, щоб підтвердити свою особу.</p>
-                        <button
-                            onClick={handleMetamaskConnect}
-                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-emerald-900/20"
-                        >
-                            Connect MetaMask
-                        </button>
-                    </div>
-                </div>
-            )}
+            <MetaMaskModal
+                isOpen={showMetaMaskModal}
+                onClose={() => setShowMetaMaskModal(false)}
+                onConnectSuccess={handleMetamaskSuccess}
+                color="emerald"
+                icon="🔑"
+                title="Верифікація Web3"
+                description="Вхід успішний. Підключіть MetaMask, щоб підтвердити свою особу."
+            />
         </div>
     );
 };
