@@ -51,4 +51,9 @@ export const filesApi = {
         });
         return response.data;
     },
+
+    searchUsers: async (query: string) => {
+        const response = await apiClient.get(`/users/search/${query}`);
+        return response.data.details;
+    },
 };

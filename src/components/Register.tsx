@@ -3,7 +3,7 @@ import {useNavigate, Link} from 'react-router-dom';
 import {authApi} from '../api/auth';
 import {generateCryptoData} from '../utils/crypto';
 import {useAuth} from "../hooks/useAuth.ts";
-import {connectMetaMask} from "../utils/metamask.ts";
+import MetaMaskModal from './MetaMaskModal';
 
 const Register = () => {
     const {login} = useAuth();
@@ -45,16 +45,9 @@ const Register = () => {
         }
     };
 
-    const handleMetamaskConnect = async () => {
-        try {
-            const isConnected = await connectMetaMask();
-            if (isConnected) {
-                navigate('/dashboard');
-            }
-        } catch (error) {
-            console.error(error);
-        }
-    }
+    const handleMetamaskSuccess = () => {
+        navigate('/dashboard');
+    };
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4 text-white font-sans">
@@ -99,28 +92,15 @@ const Register = () => {
                 </p>
             </div>
 
-            {/* MetaMask Modal */}
-            {showMetaMaskModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
-                    <div
-                        className="bg-gray-800 border border-blue-500 p-8 rounded-2xl max-w-sm w-full text-center shadow-2xl">
-                        <div className="mb-4 flex justify-center">
-                            <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center">
-                                <span className="text-4xl">🦊</span>
-                            </div>
-                        </div>
-                        <h3 className="text-2xl font-bold mb-2 text-white">Майже готово!</h3>
-                        <p className="text-gray-400 mb-6">Ваш акаунт створено. Тепер підключіть MetaMask для доступу до
-                            дешборду.</p>
-                        <button
-                            onClick={handleMetamaskConnect}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-blue-900/20"
-                        >
-                            Connect MetaMask
-                        </button>
-                    </div>
-                </div>
-            )}
+            <MetaMaskModal
+                isOpen={showMetaMaskModal}
+                onClose={() => setShowMetaMaskModal(false)}
+                onConnectSuccess={handleMetamaskSuccess}
+                color="blue"
+                icon="🦊"
+                title="Майже готово!"
+                description="Ваш акаунт створено. Тепер підключіть MetaMask для доступу до дешборду."
+            />
         </div>
     );
 };
