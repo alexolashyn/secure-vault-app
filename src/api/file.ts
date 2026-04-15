@@ -1,5 +1,5 @@
 import apiClient from "./apiClient";
-import type {UploadRequestData, UploadRequestResponse} from "../types/file.ts";
+import type { UploadRequestData, UploadRequestResponse, FileItem } from "../types/file.ts";
 import axios from "axios";
 
 export const filesApi = {
@@ -26,11 +26,29 @@ export const filesApi = {
         const response = await apiClient.get(
             `/files/download-request/${fileId}`
         );
-        return response.data;
+        return response.data.details;
     },
 
-    getFiles: async () => {
+    getOwnersFiles: async (): Promise<FileItem[]> => {
         const response = await apiClient.get('/files');
+        return response.data.details;
+    },
+
+    getSharedFiles: async (): Promise<FileItem[]> => {
+        const response = await apiClient.get('/files/shared');
+        return response.data.details;
+    },
+
+    getUserPublicKey: async (userId: string) => {
+        const response = await apiClient.get(`/users/${userId}/public-key`);
+        return response.data.details;
+    },
+
+    shareFile: async (fileId: string, userId: string, encryptedFileKey: string) => {
+        const response = await apiClient.post(`/files/share/${fileId}`, {
+            userId,
+            encryptedFileKey,
+        });
         return response.data;
-    }
+    },
 };
