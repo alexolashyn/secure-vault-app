@@ -1,3 +1,5 @@
+import { ethers } from 'ethers';
+
 const PBKDF2_ITERATIONS = 100000;
 const AES_ALGO = "AES-GCM";
 const encoder = new TextEncoder();
@@ -65,6 +67,40 @@ const deriveAESKey = async (
     );
 };
 
+export const generateSeedPhrase = (): string => {
+    return ethers.Wallet.createRandom().mnemonic?.phrase || '';
+};
+
+const deriveAESKeyFromSeed = async (
+    seedPhrase: string,
+    salt: Uint8Array,
+    usage: KeyUsage[]
+): Promise<CryptoKey> => {
+    const seedBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(seedPhrase));
+    const baseKey = await crypto.subtle.importKey(
+        "raw",
+        seedBuffer,
+        {name: "PBKDF2"},
+        false,
+        ["deriveKey"]
+    );
+
+    const safeSalt = new Uint8Array(salt.buffer as ArrayBuffer, salt.byteOffset, salt.byteLength);
+
+    return crypto.subtle.deriveKey(
+        {
+            name: "PBKDF2",
+            salt: safeSalt,
+            iterations: PBKDF2_ITERATIONS,
+            hash: "SHA-256",
+        },
+        baseKey,
+        {name: AES_ALGO, length: 256},
+        false,
+        usage
+    );
+};
+
 export const generateCryptoData = async (password: string): Promise<CryptoData> => {
     const keyPair = await crypto.subtle.generateKey(
         {
@@ -84,6 +120,42 @@ export const generateCryptoData = async (password: string): Promise<CryptoData> 
     const iv = crypto.getRandomValues(new Uint8Array(12));
 
     const aesKey = await deriveAESKey(password, salt, ["encrypt"]);
+
+    const safeIv = new Uint8Array(iv.buffer as ArrayBuffer, iv.byteOffset, iv.byteLength);
+
+    const encryptedPrivateKey = await crypto.subtle.encrypt(
+        {name: AES_ALGO, iv: safeIv},
+        aesKey,
+        privateKeyBuffer
+    );
+
+    return {
+        publicKey: arrayBufferToBase64(publicKeyBuffer),
+        encryptedPrivateKey: arrayBufferToBase64(encryptedPrivateKey),
+        salt: arrayBufferToBase64(salt.buffer as ArrayBuffer),
+        iv: arrayBufferToBase64(iv.buffer as ArrayBuffer),
+    };
+};
+
+export const generateCryptoDataFromSeed = async (seedPhrase: string): Promise<CryptoData> => {
+    const keyPair = await crypto.subtle.generateKey(
+        {
+            name: "RSA-OAEP",
+            modulusLength: 2048,
+            publicExponent: new Uint8Array([1, 0, 1]),
+            hash: "SHA-256"
+        },
+        true,
+        ["encrypt", "decrypt"]
+    );
+
+    const publicKeyBuffer = await crypto.subtle.exportKey("spki", keyPair.publicKey);
+    const privateKeyBuffer = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+
+    const aesKey = await deriveAESKeyFromSeed(seedPhrase, salt, ["encrypt"]);
 
     const safeIv = new Uint8Array(iv.buffer as ArrayBuffer, iv.byteOffset, iv.byteLength);
 
@@ -121,6 +193,33 @@ export const decryptPrivateKey = async (
         aesKey,
         safeData
     );
+};
+
+export const decryptPrivateKeyFromSeed = async (
+    encryptedPrivateKeyBase64: string,
+    seedPhrase: string,
+    saltBase64: string,
+    ivBase64: string
+): Promise<ArrayBuffer> => {
+    const salt = base64ToUint8Array(saltBase64);
+    const iv = base64ToUint8Array(ivBase64);
+    const encryptedData = base64ToUint8Array(encryptedPrivateKeyBase64);
+
+    const aesKey = await deriveAESKeyFromSeed(seedPhrase, salt, ["decrypt"]);
+
+    const safeIv = new Uint8Array(iv.buffer as ArrayBuffer, iv.byteOffset, iv.byteLength);
+    const safeData = new Uint8Array(encryptedData.buffer as ArrayBuffer, encryptedData.byteOffset, encryptedData.byteLength);
+
+    try {
+        return crypto.subtle.decrypt(
+            {name: AES_ALGO, iv: safeIv},
+            aesKey,
+            safeData
+        );
+    } catch (error) {
+        console.error('Failed to decrypt private key with seed phrase:', error);
+        throw new Error('Invalid seed phrase or corrupted data');
+    }
 };
 
 export const importPrivateKey = async (pkcs8: ArrayBuffer): Promise<CryptoKey> => {

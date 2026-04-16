@@ -1,9 +1,10 @@
 import React, {useState} from 'react';
 import {useNavigate, Link} from 'react-router-dom';
 import {authApi} from '../api/auth';
-import {generateCryptoData} from '../utils/crypto';
+import {generateCryptoDataFromSeed, generateSeedPhrase} from '../utils/crypto';
 import {useAuth} from "../hooks/useAuth.ts";
 import MetaMaskModal from './MetaMaskModal';
+import SeedPhraseModal from './SeedPhraseModal';
 
 const Register = () => {
     const {login} = useAuth();
@@ -11,6 +12,8 @@ const Register = () => {
     const [formData, setFormData] = useState({email: '', password: ''});
     const [loading, setLoading] = useState(false);
     const [showMetaMaskModal, setShowMetaMaskModal] = useState(false);
+    const [showSeedPhraseModal, setShowSeedPhraseModal] = useState(false);
+    const [seedPhrase, setSeedPhrase] = useState('');
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData(prev => ({...prev, [e.target.name]: e.target.value}));
@@ -21,7 +24,8 @@ const Register = () => {
         setLoading(true);
 
         try {
-            const cryptoData = await generateCryptoData(formData.password);
+            const generatedSeedPhrase = generateSeedPhrase();
+            const cryptoData = await generateCryptoDataFromSeed(generatedSeedPhrase);
 
             const {details} = await authApi.register({
                 email: formData.email,
@@ -34,11 +38,11 @@ const Register = () => {
 
             if (details.accessToken) {
                 login(details.accessToken);
-                setShowMetaMaskModal(true);
+                setSeedPhrase(generatedSeedPhrase);
+                setShowSeedPhraseModal(true);
             }
 
         } catch (error) {
-            alert('Registration failed');
             console.error(error);
         } finally {
             setLoading(false);
@@ -47,6 +51,11 @@ const Register = () => {
 
     const handleMetamaskSuccess = () => {
         navigate('/dashboard');
+    };
+
+    const handleSeedPhraseModalClose = () => {
+        setShowSeedPhraseModal(false);
+        setShowMetaMaskModal(true);
     };
 
     return (
@@ -92,14 +101,19 @@ const Register = () => {
                 </p>
             </div>
 
+            <SeedPhraseModal
+                isOpen={showSeedPhraseModal}
+                seedPhrase={seedPhrase}
+                onClose={handleSeedPhraseModalClose}
+            />
             <MetaMaskModal
                 isOpen={showMetaMaskModal}
                 onClose={() => setShowMetaMaskModal(false)}
                 onConnectSuccess={handleMetamaskSuccess}
                 color="blue"
                 icon="🦊"
-                title="Майже готово!"
-                description="Ваш акаунт створено. Тепер підключіть MetaMask для доступу до дешборду."
+                title="Almost here!"
+                description="Your account has been created. Now connect MetaMask to access the dashboard."
             />
         </div>
     );
