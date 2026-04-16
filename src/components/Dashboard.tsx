@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { User, Cloud } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import {
-    encryptFile, decryptFile, decryptFileKey, decryptPrivateKey,
+    encryptFile, decryptFile, decryptFileKey, decryptPrivateKeyFromSeed,
     importPrivateKey
 } from '../utils/crypto';
 import { filesApi } from "../api/file.ts";
@@ -12,18 +12,25 @@ import Header from './Header';
 import UploadSection from './UploadSection';
 import FileList from './FileList';
 import ShareModal from './ShareModal';
+import SeedPhraseInputModal from './SeedPhraseInputModal';
 
 const Dashboard = () => {
     const { logout, user } = useAuth();
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
     const [ownerFiles, setOwnerFiles] = useState<FileItem[]>([]);
-    const [sharedFiles, setSharedFiles] = useState<FileItem[]>([]);
     const [loadingOwnerFiles, setLoadingOwnerFiles] = useState(true);
+
+    const [sharedFiles, setSharedFiles] = useState<FileItem[]>([]);
     const [loadingSharedFiles, setLoadingSharedFiles] = useState(true);
+
     const [shareModalOpen, setShareModalOpen] = useState(false);
     const [shareFileId, setShareFileId] = useState<string | null>(null);
+
+    const [seedPhraseModalOpen, setSeedPhraseModalOpen] = useState(false);
+    const pendingDownloadRef = useRef<((seedPhrase: string) => Promise<void>) | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -39,8 +46,8 @@ const Dashboard = () => {
 
             setOwnerFiles(ownerResponse);
             setSharedFiles(sharedResponse);
-        } catch (e) {
-            console.error(e);
+        } catch (error) {
+            console.error(error);
         } finally {
             setLoadingOwnerFiles(false);
             setLoadingSharedFiles(false);
@@ -91,7 +98,7 @@ const Dashboard = () => {
             const tx = await contract.logAction(accounts[0], fileId, 0);
             await tx.wait();
 
-            setStatusMessage("Success!");
+            setStatusMessage("Success");
             await loadFiles();
         } catch (error) {
             console.error(error);
@@ -99,7 +106,7 @@ const Dashboard = () => {
         } finally {
             setIsProcessing(false);
             if (fileInputRef.current) fileInputRef.current.value = "";
-            setTimeout(() => setStatusMessage(null), 3000);
+            setTimeout(() => setStatusMessage(null), 2000);
         }
     };
 
@@ -110,49 +117,64 @@ const Dashboard = () => {
             const response = await fetch(downloadUrl);
             const encryptedBuffer = await response.arrayBuffer();
 
-            const password = prompt("Enter your password");
-            if (!password) return;
+            pendingDownloadRef.current = async (seedPhrase: string) => {
+                const pkcs8 = await decryptPrivateKeyFromSeed(
+                    user.encryptedPrivateKey,
+                    seedPhrase,
+                    user.kdfSalt,
+                    user.iv
+                );
 
-            const pkcs8 = await decryptPrivateKey(
-                user.encryptedPrivateKey,
-                password,
-                user.kdfSalt,
-                user.iv
-            );
+                const privateKey = await importPrivateKey(pkcs8);
 
-            const privateKey = await importPrivateKey(pkcs8);
+                const keyToUse = sharedEncryptedFileKey || file.encryptedFileKey;
 
-            let keyToUse = file.encryptedFileKey;
-            if (sharedEncryptedFileKey) {
-                keyToUse = sharedEncryptedFileKey;
-            }
+                const fileKey = await decryptFileKey(
+                    keyToUse,
+                    privateKey
+                );
 
-            const fileKey = await decryptFileKey(
-                keyToUse,
-                privateKey
-            );
+                const decryptedBuffer = await decryptFile(
+                    encryptedBuffer,
+                    fileKey,
+                    file.fileIv
+                );
 
-            const decryptedBuffer = await decryptFile(
-                encryptedBuffer,
-                fileKey,
-                file.fileIv
-            );
+                const blob = new Blob([decryptedBuffer], {
+                    type: file.mimeType
+                });
 
-            const blob = new Blob([decryptedBuffer], {
-                type: file.mimeType
-            });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = file.name;
 
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = file.name;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            };
 
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+            setSeedPhraseModalOpen(true);
 
         } catch (error) {
             console.error(error);
         }
+    };
+
+    const handleSeedPhraseSubmit = async (seedPhrase: string) => {
+        setSeedPhraseModalOpen(false);
+        if (pendingDownloadRef.current && typeof pendingDownloadRef.current === 'function') {
+            try {
+                await pendingDownloadRef.current(seedPhrase);
+                pendingDownloadRef.current = null;
+            } catch (error) {
+                console.error(error);
+            }
+        }
+    };
+
+    const handleSeedPhraseCancel = () => {
+        setSeedPhraseModalOpen(false);
+        pendingDownloadRef.current = null;
     };
 
     return (
@@ -222,6 +244,11 @@ const Dashboard = () => {
                 fileId={shareFileId}
                 user={user}
                 onShareSuccess={loadFiles}
+            />
+            <SeedPhraseInputModal
+                isOpen={seedPhraseModalOpen}
+                onSubmit={handleSeedPhraseSubmit}
+                onCancel={handleSeedPhraseCancel}
             />
         </div>
     );

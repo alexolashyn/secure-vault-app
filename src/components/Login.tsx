@@ -86,8 +86,8 @@ const Login = () => {
                 onConnectSuccess={handleMetamaskSuccess}
                 color="emerald"
                 icon="🔑"
-                title="Верифікація Web3"
-                description="Вхід успішний. Підключіть MetaMask, щоб підтвердити свою особу."
+                title="Verification Web3"
+                description="Login successful. Connect MetaMask to verify your identity."
             />
         </div>
     );
