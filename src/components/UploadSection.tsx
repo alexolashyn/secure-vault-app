@@ -4,12 +4,14 @@ import { Lock, Plus, Loader2 } from 'lucide-react';
 interface UploadSectionProps {
     isProcessing: boolean;
     statusMessage: string | null;
+    statusVariant: 'info' | 'success' | 'error' | null;
     onUploadClick: () => void;
 }
 
 const UploadSection: React.FC<UploadSectionProps> = ({
     isProcessing,
     statusMessage,
+    statusVariant,
     onUploadClick
 }) => {
     return (
@@ -49,7 +51,9 @@ const UploadSection: React.FC<UploadSectionProps> = ({
 
                 {statusMessage && (
                     <div className={`mt-4 px-4 py-2 rounded-full text-xs font-medium animate-pulse
-                        ${statusMessage.includes('Success') ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                        ${statusVariant === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 
+                          statusVariant === 'error' ? 'bg-red-500/20 text-red-400' : 
+                          'bg-blue-500/20 text-blue-400'}`}>
                         {statusMessage}
                     </div>
                 )}

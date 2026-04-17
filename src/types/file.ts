@@ -3,7 +3,8 @@ import type {BaseResponse} from "./base-response.ts";
 export type FileItem = {
     id: string,
     minioPath: string,
-    name: string
+    name: string,
+    status: FILE_STATUS,
 };
 
 export interface UploadRequestData {
@@ -20,5 +21,7 @@ export interface UploadRequestDetails {
 }
 
 export type UploadRequestResponse = BaseResponse<UploadRequestDetails>;
+
+export type FILE_STATUS = "pending" | "success" | "failed";
 
 
