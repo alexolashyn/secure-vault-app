@@ -1,13 +1,19 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { User, Share2, Loader2, CheckCircle2, XCircle, X } from 'lucide-react';
-import { filesApi } from '../api/file';
 import SeedPhraseInputModal from './SeedPhraseInputModal';
+
+import { filesApi } from '../api/file';
+
 import { decryptPrivateKeyFromSeed, importPrivateKey, encryptFileKeyForSharing } from '../utils/crypto';
+
+import { getAuditContract } from '../utils/contract';
+
 import type { User as CurrentUser } from '../types/auth';
 
 interface SearchUser {
     id: string;
     email: string;
+    walletAddress?: string;
 }
 
 type SharePhase =
@@ -15,6 +21,7 @@ type SharePhase =
     | 'fetching-key'
     | 'awaiting-seed'
     | 'encrypting'
+    | 'logging'
     | 'uploading'
     | 'success'
     | 'error';
@@ -30,6 +37,7 @@ interface ShareModalProps {
 const PHASE_MESSAGES: Partial<Record<SharePhase, string>> = {
     'fetching-key': "Getting recipient's public key…",
     'encrypting': 'Encrypting file key for recipient…',
+    'logging': 'Logging to blockchain…',
     'uploading': 'Sharing file…',
     'success': 'File shared successfully!',
     'error': 'Something went wrong. Please try again.',
@@ -172,7 +180,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
         setPhase('error');
         scheduleReset(STATUS_DISMISS_MS);
         onClose();
-    }
+    };
 
     const handleShare = async () => {
         if (!selectedUser || !fileId) return;
@@ -188,7 +196,6 @@ const ShareModal: React.FC<ShareModalProps> = ({
             pendingShareRef.current = async (seedPhrase: string) => {
                 try {
                     setPhase('encrypting');
-
                     const pkcs8 = await decryptPrivateKeyFromSeed(
                         user.encryptedPrivateKey,
                         seedPhrase,
@@ -202,13 +209,25 @@ const ShareModal: React.FC<ShareModalProps> = ({
                         publicKey,
                     );
 
+                    setPhase('logging');
+                    const { contract, signer } = await getAuditContract();
+                    console.log('[audit] signer.address:', signer.address);
+                    const tx = await contract.logShare(
+                        signer.address,
+                        user.email,
+                        fileId,
+                        '0x7690Fc3976782786F2dBEec096cf62FC6A601267',
+                    );
+                    await tx.wait();
+                    console.log('[audit] logShare confirmed:', tx.hash);
+
                     setPhase('uploading');
                     await filesApi.shareFile(fileId, selectedUser.id, encryptedFileKeyForRecipient);
 
                     setPhase('success');
                     scheduleReset(SUCCESS_CLOSE_MS, true);
                 } catch (err) {
-                    handleFail(err, '[ShareModal] Encryption/upload failed:');
+                    handleFail(err, '[ShareModal] Share failed:');
                 }
             };
 
@@ -244,19 +263,16 @@ const ShareModal: React.FC<ShareModalProps> = ({
 
     return (
         <>
-            {/* Backdrop — click-outside to close */}
             <div
                 className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
                 onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
             >
-                {/* Dialog */}
                 <div
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="share-modal-title"
                     className="bg-[#1e293b] border border-slate-700/50 rounded-3xl shadow-2xl w-full max-w-md p-8"
                 >
-                    {/* Header */}
                     <div className="flex justify-between items-center mb-6">
                         <h3 id="share-modal-title" className="text-2xl font-bold text-white">
                             Share File
@@ -272,7 +288,6 @@ const ShareModal: React.FC<ShareModalProps> = ({
                     </div>
 
                     <div className="space-y-4">
-                        {/* Search input */}
                         <div>
                             <label htmlFor="user-search" className="block text-sm font-medium text-slate-300 mb-2">
                                 Search user by email
@@ -296,7 +311,6 @@ const ShareModal: React.FC<ShareModalProps> = ({
                             </div>
                         </div>
 
-                        {/* Search results dropdown */}
                         {searchResults.length > 0 && (
                             <ul className="bg-slate-800 border border-slate-600 rounded-xl overflow-y-auto max-h-60">
                                 {searchResults.map((u) => (
@@ -318,7 +332,6 @@ const ShareModal: React.FC<ShareModalProps> = ({
                             </ul>
                         )}
 
-                        {/* Selected user */}
                         {selectedUser && (
                             <SelectedUserCard
                                 user={selectedUser}
@@ -327,10 +340,8 @@ const ShareModal: React.FC<ShareModalProps> = ({
                             />
                         )}
 
-                        {/* Status banner */}
                         <StatusBanner phase={phase} />
 
-                        {/* Actions */}
                         <div className="flex gap-3 pt-2">
                             <button
                                 onClick={handleClose}

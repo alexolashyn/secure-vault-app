@@ -56,4 +56,11 @@ export const filesApi = {
         const response = await apiClient.get(`/users/search/${query}`);
         return response.data.details;
     },
+
+    updateFileStatus: async (fileId: string, status: string) => {
+        const response = await apiClient.patch(`/files/status/${fileId}`, {
+            status,
+        });
+        return response.data;
+    },
 };
